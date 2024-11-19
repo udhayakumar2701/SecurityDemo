@@ -1,16 +1,24 @@
 package com.security.example.demo.Security;
 
+import com.security.example.demo.ErrorHandling.CustomLoginErrorHandiling;
+import com.security.example.demo.Service.CustomUserDetailsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationFailureHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -21,9 +29,14 @@ import java.util.List;
 @EnableWebSecurity // Enables web security, which applies Spring Security settings to the application.
 public class SpringSecurity {
 
+
     @Autowired
     // Injects an instance of the UserDetailsService interface. The customUserDetailsService will handle loading user-specific details during authentication.
     UserDetailsService customUserDetailsService;
+
+    @Autowired
+    CustomLoginErrorHandiling customLoginErrorHandiling;
+
 
     /**
      * Configures the HTTP security settings for the web application.
@@ -35,21 +48,34 @@ public class SpringSecurity {
     public SecurityFilterChain securityFilterChain(HttpSecurity security) throws  Exception{
         security
                 // Disables CSRF (Cross-Site Request Forgery) protection. In a production system, this should be enabled unless there is a specific reason to disable it.
-                .csrf(csrf->csrf.disable())
-                .cors(Customizer.withDefaults())// Enables CORS (Cross-Origin Resource Sharing) with default settings.
-                .authorizeHttpRequests(request->request// Configures authorization rules for HTTP requests.
-                .requestMatchers("/login").permitAll() // The "/login" endpoint is allowed to be accessed by anyone, no authentication required.
-                .anyRequest().authenticated())// Any other requests require authentication.
-                .formLogin(login-> login // Configures the login page for the form-based login.
-                .loginPage("/login") // Customizes the login page URL. Users will be redirected here for authentication
-                .permitAll())       // Ensures that the login page is accessible to everyone (no authentication needed).
-                .formLogin(Customizer.withDefaults()) // Applies default login configuration settings.
-                // Applies default logout configuration settings.
-                .logout(Customizer.withDefaults());
-
+               .csrf(csrf->csrf.disable())
+                .cors(
+                        Customizer.withDefaults()
+                )// Enables CORS (Cross-Origin Resource Sharing) with default settings.
+                .authorizeHttpRequests(
+                        request->request// Configures authorization rules for HTTP requests.
+                        .requestMatchers("/auth/login","/csrf").permitAll() // The "/login" endpoint is allowed to be accessed by anyone, no authentication required.
+                        .anyRequest().authenticated()// Any other requests require authentication.
+                )
+                .formLogin(
+                        login-> login // Configures the login page for the form-based login.
+                        .loginPage("/auth/login")
+                        .loginProcessingUrl("/login")
+                        .failureHandler(authenticationFailureHandler()) // Customizes the login page URL. Users will be redirected here for authentication
+                        .permitAll() // Ensures that the login page is accessible to everyone (no authentication needed).
+                )
+               // .formLogin(Customizer.withDefaults()) // Applies default login configuration settings.
+                .logout(logout -> logout
+                        .logoutUrl("/logout") // The default logout URL (POST request)
+                        .logoutSuccessUrl("/login?logout=true") // Redirect to login page with logout=true after logout
+                        .permitAll()) // Allow anyone to access the logout URL
+              ;
         // Returns the configured SecurityFilterChain to apply the security settings.
         return security.build();
     }
+
+
+
 
     /**
      * This method defines a Spring Bean that provides an AuthenticationProvider.
@@ -111,4 +137,26 @@ public class SpringSecurity {
         // Return the configured CORS source.
         return urlBasedCorsConfigurationSource;
     }
+
+
+    @Bean
+    public AuthenticationFailureHandler authenticationFailureHandler() {
+        return (request, response, exception) -> {
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+            if(exception instanceof UsernameNotFoundException){
+                response.getWriter().write("{\"error\": \"username is not found\"}");
+            }else
+
+             // Send 401 status on authentication failure
+            response.getWriter().write("{\"error\": \"password wrong\"}");
+        };
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
+
+    }
+
+
 }

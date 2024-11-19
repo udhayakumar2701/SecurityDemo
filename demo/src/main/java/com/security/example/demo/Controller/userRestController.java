@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-
+//@RestController
 public class userRestController {
 
     @Autowired
@@ -18,6 +18,7 @@ public class userRestController {
 
         @PostMapping("/login")
         public ResponseEntity loginFunction(@RequestBody User user) {
+            System.out.println("In the rest controller");
            return  new ResponseEntity<>("sucessfull",HttpStatus.OK);
         }
 
